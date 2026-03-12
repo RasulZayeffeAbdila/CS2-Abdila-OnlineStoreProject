@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — VEND{% endblock %}
+
+{% block body %}
+
+<!-- Topbar -->
+<div class="topbar">
+  <a class="top-logo" href="/welcome">V<span>E</span>ND</a>
+  <span class="top-name">{{ name }}</span>
+  <span class="top-role {{ 'role-a' if role == 'a' else 'role-c' }}">
+    {{ "Admin" if role == "a" else "Customer" }}
+  </span>
+  <a class="top-out" href="/logout">Sign Out</a>
+</div>
+
+<!-- Tabs -->
+<div class="tabs">
+  {% if role == "a" %}
+    <button class="tab on" onclick="show('tProfile', this)">Profile</button>
+    <button class="tab"    onclick="show('tOrders',  this)">All Orders</button>
+    <button class="tab"    onclick="show('tUsers',   this)">Users</button>
+  {% else %}
+    <button class="tab on" onclick="show('tProfile', this)">Profile</button>
+    <button class="tab"    onclick="show('tOrders',  this)">My Orders</button>
+    <button class="tab"    onclick="show('tPlace',   this)">Place Order</button>
+  {% endif %}
+</div>
+
+<div class="content">
+
+  <!-- Profile -->
+  <div class="page on" id="tProfile">
+    <div class="prof">
+      <div class="avatar">{{ username[:2]|upper }}</div>
+      <div>
+        <div class="prof-name">{{ name }}</div>
+        <div class="prof-meta">
+          <div>Username &nbsp;<span>@{{ username }}</span></div>
+          <div>Age &nbsp;<span>{{ age }}</span></div>
+          <div>Address &nbsp;<span>{{ address }}</span></div>
+        </div>
+      </div>
+    </div>
+
+    {% if role == "a" %}
+    <div class="revenue-card">
+      <div class="revenue-lbl">Total Revenue</div>
+      <div class="revenue-val">₱{{ "%.2f"|format(revenue) }}</div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Orders -->
+  <div class="page" id="tOrders">
+    {% if role == "a" %}
+      {% for uname, uorders in all_orders.items() %}
+        {% if uorders %}
+          <div class="card" style="margin-bottom:20px">
+            <div class="card-head">@{{ uname }} — {{ accounts[uname][1] }}</div>
+            <table>
+              <thead>
+                <tr><th>Product</th><th>Date</th><th>Quantity</th><th>Price</th></tr>
+              </thead>
+              <tbody>
+                {% for product, info in uorders.items() %}
+                <tr>
+                  <td>{{ product }}</td>
+                  <td style="color:var(--mu)">{{ info[0] }}</td>
+                  <td>{{ info[1] }}</td>
+                  <td>₱{{ "%.2f"|format(info[2]) }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% endif %}
+      {% endfor %}
+    {% else %}
+      <div class="card">
+        <div class="card-head">My Orders</div>
+        <table>
+          <thead>
+            <tr><th>Product</th><th>Date</th><th>Quantity</th><th>Price</th></tr>
+          </thead>
+          <tbody>
+            {% if user_orders %}
+              {% for product, info in user_orders.items() %}
+              <tr>
+                <td>{{ product }}</td>
+                <td style="color:var(--mu)">{{ info[0] }}</td>
+                <td>{{ info[1] }}</td>
+                <td>₱{{ "%.2f"|format(info[2]) }}</td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr><td colspan="4" class="empty">No orders yet.</td></tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    {% endif %}
+  </div>
+
+  <!-- Place Order (customer only) -->
+  {% if role != "a" %}
+  <div class="page" id="tPlace">
+    <div class="order-form">
+      <h3>Place an Order</h3>
+      <form id="orderForm" novalidate>
+
+        <label class="lbl">Product</label>
+        <input class="inp" id="product" type="text" placeholder="e.g. Shoes"/>
+        <div class="field-err" id="err-product"></div>
+
+        <label class="lbl">Quantity</label>
+        <input class="inp" id="quantity" type="text" placeholder="e.g. 2pcs"/>
+        <div class="field-err" id="err-quantity"></div>
+
+        <label class="lbl">Price (₱)</label>
+        <input class="inp" id="price" type="number" placeholder="e.g. 250" min="0" step="0.01"/>
+        <div class="field-err" id="err-price"></div>
+
+        <button class="btn-sm" type="submit">Submit Order</button>
+      </form>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Users (admin only) -->
+  {% if role == "a" %}
+  <div class="page" id="tUsers">
+    <div class="card">
+      <div class="card-head">All Users</div>
+      <table>
+        <thead>
+          <tr><th>Username</th><th>Name</th><th>Role</th><th>Age</th><th>Address</th></tr>
+        </thead>
+        <tbody>
+          {% for uname, udata in accounts.items() %}
+          <tr>
+            <td>@{{ uname }}</td>
+            <td>{{ udata[1] }}</td>
+            <td>
+              <span class="top-role {{ 'role-a' if udata[2] == 'a' else 'role-c' }}"
+                    style="font-size:11px; padding:3px 12px">
+                {{ "Admin" if udata[2] == "a" else "Customer" }}
+              </span>
+            </td>
+            <td>{{ udata[3] }}</td>
+            <td style="color:var(--mu)">{{ udata[4] }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+
+<script>
+function show(id, btn) {
+  document.querySelectorAll('.tab').forEach(t  => t.classList.remove('on'));
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('on'));
+  btn.classList.add('on');
+  document.getElementById(id).classList.add('on');
+}
+
+// ── Place Order validation ──
+const orderForm = document.getElementById("orderForm");
+if (orderForm) {
+  const productErrors  = [
+    "Product name is required.",
+    "You need to enter a product.",
+    "A product name cannot be left empty.",
+  ];
+  const quantityErrors = [
+    "Quantity is required.",
+    "You need to specify a quantity.",
+    "Quantity cannot be left empty.",
+  ];
+  const priceErrors    = [
+    "Price is required.",
+    "You need to enter a price.",
+    "A price cannot be left empty.",
+    "Price must be provided before submitting.",
+  ];
+  const priceInvalid   = [
+    "Price must be a positive number.",
+    "Enter a valid price greater than zero.",
+    "Price cannot be zero or negative.",
+  ];
+
+  function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+  function showErr(id, msg) {
+    const el = document.getElementById("err-" + id);
+    el.textContent = msg;
+    el.style.display = msg ? "block" : "none";
+  }
+
+  orderForm.addEventListener("submit", function(e) {
+    e.preventDefault();
+    const product  = document.getElementById("product").value.trim();
+    const quantity = document.getElementById("quantity").value.trim();
+    const price    = document.getElementById("price").value.trim();
+    let valid = true;
+
+    if (!product)  { showErr("product",  pick(productErrors));  valid = false; }
+    else             showErr("product",  "");
+
+    if (!quantity) { showErr("quantity", pick(quantityErrors)); valid = false; }
+    else             showErr("quantity", "");
+
+    if (!price)    { showErr("price",    pick(priceErrors));    valid = false; }
+    else if (parseFloat(price) <= 0) { showErr("price", pick(priceInvalid)); valid = false; }
+    else             showErr("price",    "");
+
+    if (valid) {
+      const form = document.createElement("form");
+      form.method = "POST";
+      form.action = "/place_order";
+      [["product", product], ["quantity", quantity], ["price", price]].forEach(([n, v]) => {
+        const i = document.createElement("input");
+        i.name = n; i.value = v;
+        form.appendChild(i);
+      });
+      document.body.appendChild(form);
+      form.submit();
+    }
+  });
+}
+</script>
+
+{% endblock %}
