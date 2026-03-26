@@ -1,0 +1,435 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — VEND{% endblock %}
+
+{% block body %}
+
+<!-- Hidden meta — JS reads role from here instead of Jinja inside script -->
+<span id="page-meta" data-role="{{ role }}" style="display:none"></span>
+
+<!-- Topbar -->
+<div class="topbar">
+  <a class="top-logo" href="/welcome">V<span>E</span>ND</a>
+  <span class="top-name">{{ name }}</span>
+  <span class="top-role {{ 'role-a' if role == 'a' else 'role-c' }}">
+    {{ "Admin" if role == "a" else "Customer" }}
+  </span>
+  <a class="top-out" href="/logout">Sign Out</a>
+</div>
+
+<!-- Tabs -->
+<div class="tabs">
+  {% if role == "a" %}
+    <button class="tab on" id="btn-tProfile" onclick="show('tProfile', this)">Profile</button>
+    <button class="tab"    id="btn-tOrders"  onclick="show('tOrders',  this)">All Orders</button>
+    <button class="tab"    id="btn-tUsers"   onclick="show('tUsers',   this)">Users</button>
+  {% else %}
+    <button class="tab on" id="btn-tProfile" onclick="show('tProfile', this)">Profile</button>
+    <button class="tab"    id="btn-tOrders"  onclick="show('tOrders',  this)">My Orders</button>
+    <button class="tab"    id="btn-tPlace"   onclick="show('tPlace',   this)">Place Order</button>
+  {% endif %}
+</div>
+
+<div class="content">
+
+  <!-- Success / Error banners -->
+  {% if msg %}
+  <div class="banner banner-ok">{{ msg }}</div>
+  {% endif %}
+  {% if error %}
+  <div class="banner banner-err">{{ error }}</div>
+  {% endif %}
+
+  <!-- Profile -->
+  <div class="page on" id="tProfile">
+    <div class="prof">
+      <div class="avatar">{{ username[:2]|upper }}</div>
+      <div>
+        <div class="prof-name">{{ name }}</div>
+        <div class="prof-meta">
+          <div>Username &nbsp;<span>@{{ username }}</span></div>
+          <div>Age &nbsp;<span>{{ age }}</span></div>
+          <div>Address &nbsp;<span>{{ address }}</span></div>
+        </div>
+      </div>
+    </div>
+    {% if role == "a" %}
+    <div class="revenue-card">
+      <div class="revenue-lbl">Total Revenue</div>
+      <div class="revenue-val">&#8369;{{ "%.2f"|format(revenue) }}</div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Orders -->
+  <div class="page" id="tOrders">
+    {% if role == "a" %}
+      {% for uname, uorders in all_orders.items() %}
+        {% if uorders %}
+          <div class="card" style="margin-bottom:20px">
+            <div class="card-head">@{{ uname }} &mdash; {{ accounts[uname][1] }}</div>
+            <table>
+              <thead>
+                <tr><th>Product</th><th>Date</th><th>Quantity</th><th>Price</th><th>Actions</th></tr>
+              </thead>
+              <tbody>
+                {% for product, info in uorders.items() %}
+                <tr>
+                  <td>{{ product }}</td>
+                  <td style="color:var(--mu)">{{ info[0] }}</td>
+                  <td>{{ info[1] }}</td>
+                  <td>&#8369;{{ "%.2f"|format(info[2]) }}</td>
+                  <td class="action-cell">
+                    <button class="btn-edit"
+                      onclick="openEdit('{{ uname }}', '{{ product }}', '{{ info[1] }}', '{{ info[2] }}')">
+                      Edit
+                    </button>
+                    <button class="btn-del"
+                      onclick="openDelete('{{ uname }}', '{{ product }}')">
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% endif %}
+      {% endfor %}
+    {% else %}
+      <div class="card">
+        <div class="card-head">My Orders</div>
+        <table>
+          <thead>
+            <tr><th>Product</th><th>Date</th><th>Quantity</th><th>Price</th><th></th></tr>
+          </thead>
+          <tbody>
+            {% if user_orders %}
+              {% for product, info in user_orders.items() %}
+              <tr>
+                <td>{{ product }}</td>
+                <td style="color:var(--mu)">{{ info[0] }}</td>
+                <td>{{ info[1] }}</td>
+                <td>&#8369;{{ "%.2f"|format(info[2]) }}</td>
+                <td class="action-cell">
+                  <button class="btn-del"
+                    onclick="openDelete('{{ username }}', '{{ product }}')">
+                    Cancel Order
+                  </button>
+                </td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr><td colspan="5" class="empty">No orders yet.</td></tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    {% endif %}
+  </div>
+
+  <!-- Place Order (customer only) -->
+  {% if role != "a" %}
+  <div class="page" id="tPlace">
+    <div class="order-form">
+      <h3>Place an Order</h3>
+      <form id="orderForm" novalidate>
+
+        <label class="lbl">Product</label>
+        <input class="inp" id="product" type="text" placeholder="e.g. Shoes"/>
+        <div class="field-err" id="err-product"></div>
+
+        <label class="lbl">Quantity</label>
+        <input class="inp" id="quantity" type="text" placeholder="e.g. 2pcs"/>
+        <div class="field-err" id="err-quantity"></div>
+
+        <label class="lbl">Price (&#8369;)</label>
+        <input class="inp" id="price" type="number" placeholder="e.g. 250" min="0" step="0.01"/>
+        <div class="field-err" id="err-price"></div>
+
+        <button class="btn-sm" type="submit">Submit Order</button>
+      </form>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Users (admin only) -->
+  {% if role == "a" %}
+  <div class="page" id="tUsers">
+    <div class="card">
+      <div class="card-head">All Users</div>
+      <table>
+        <thead>
+          <tr><th>Username</th><th>Name</th><th>Role</th><th>Age</th><th>Address</th></tr>
+        </thead>
+        <tbody>
+          {% for uname, udata in accounts.items() %}
+          <tr>
+            <td>@{{ uname }}</td>
+            <td>{{ udata[1] }}</td>
+            <td>
+              <span class="top-role {{ 'role-a' if udata[2] == 'a' else 'role-c' }}"
+                    style="font-size:11px; padding:3px 12px">
+                {{ "Admin" if udata[2] == "a" else "Customer" }}
+              </span>
+            </td>
+            <td>{{ udata[3] }}</td>
+            <td style="color:var(--mu)">{{ udata[4] }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+
+<!-- Delete / Cancel Modal -->
+<div id="deleteModal" class="modal-overlay" style="display:none">
+  <div class="modal-box">
+    <div class="modal-title" id="delete-title">Confirm</div>
+    <div class="modal-body"  id="delete-body"></div>
+    <div class="modal-note">This action cannot be undone.</div>
+    <div class="modal-actions">
+      <button class="modal-cancel"  onclick="closeDelete()">Go Back</button>
+      <button class="modal-confirm" id="delete-confirm-btn" onclick="submitDelete()">Confirm</button>
+    </div>
+    <form id="deleteForm" method="POST" action="/delete_order" style="display:none">
+      <input type="hidden" name="target_user" id="del-user"/>
+      <input type="hidden" name="product"     id="del-product"/>
+    </form>
+  </div>
+</div>
+
+<!-- Edit Modal (rendered for everyone, shown only when openEdit is called by admin buttons) -->
+<div id="editModal" class="modal-overlay" style="display:none">
+  <div class="modal-box">
+    <div class="modal-title">Edit Order</div>
+    <form id="editForm" method="POST" action="/edit_order">
+      <input type="hidden" name="target_user" id="edit-user"/>
+      <input type="hidden" name="old_product" id="edit-old-product"/>
+
+      <label class="lbl" style="margin-top:4px">Product</label>
+      <input class="inp" type="text"   name="new_product"  id="edit-product"  placeholder="Product name"/>
+      <div class="field-err" id="edit-err-product"></div>
+
+      <label class="lbl">Quantity</label>
+      <input class="inp" type="text"   name="new_quantity" id="edit-quantity" placeholder="e.g. 2pcs"/>
+      <div class="field-err" id="edit-err-quantity"></div>
+
+      <label class="lbl">Price (&#8369;)</label>
+      <input class="inp" type="number" name="new_price"    id="edit-price"   placeholder="e.g. 250" min="0" step="0.01"/>
+      <div class="field-err" id="edit-err-price"></div>
+
+      <div class="modal-actions" style="margin-top:8px">
+        <button type="button" class="modal-cancel"  onclick="closeEdit()">Cancel</button>
+        <button type="submit" class="modal-confirm" style="background:linear-gradient(135deg,#27ae60,#1e8449)">
+          Save Changes
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+// Read role from the hidden span — no Jinja inside script
+var userRole = document.getElementById("page-meta").dataset.role;
+
+// ── Tab switching ──
+function show(id, btn) {
+  var tabs  = document.querySelectorAll(".tab");
+  var pages = document.querySelectorAll(".page");
+  var i;
+  for (i = 0; i < tabs.length;  i++) { tabs[i].classList.remove("on"); }
+  for (i = 0; i < pages.length; i++) { pages[i].classList.remove("on"); }
+  btn.classList.add("on");
+  document.getElementById(id).classList.add("on");
+}
+
+// Go back to the correct tab after a delete or edit redirect
+var urlTab = new URLSearchParams(window.location.search).get("tab");
+if (urlTab) {
+  var tabBtn = document.getElementById("btn-" + urlTab);
+  if (tabBtn) { show(urlTab, tabBtn); }
+}
+
+// ── Delete / Cancel modal ──
+function openDelete(user, product) {
+  if (userRole === "a") {
+    document.getElementById("delete-title").textContent       = "Confirm Deletion";
+    document.getElementById("delete-body").textContent        = "Are you sure you want to delete \"" + product + "\"?";
+    document.getElementById("delete-confirm-btn").textContent = "Delete";
+  } else {
+    document.getElementById("delete-title").textContent       = "Cancel Order";
+    document.getElementById("delete-body").textContent        = "Are you sure you want to cancel your order for \"" + product + "\"?";
+    document.getElementById("delete-confirm-btn").textContent = "Yes, Cancel It";
+  }
+  document.getElementById("del-user").value    = user;
+  document.getElementById("del-product").value = product;
+  document.getElementById("deleteModal").style.display = "flex";
+}
+
+function closeDelete() {
+  document.getElementById("deleteModal").style.display = "none";
+}
+
+function submitDelete() {
+  document.getElementById("deleteForm").submit();
+}
+
+document.getElementById("deleteModal").addEventListener("click", function(e) {
+  if (e.target === this) { closeDelete(); }
+});
+
+// ── Edit modal ──
+function openEdit(user, product, quantity, price) {
+  document.getElementById("edit-user").value         = user;
+  document.getElementById("edit-old-product").value  = product;
+  document.getElementById("edit-product").value      = product;
+  document.getElementById("edit-quantity").value     = quantity;
+  document.getElementById("edit-price").value        = price;
+  document.getElementById("editModal").style.display = "flex";
+}
+
+function closeEdit() {
+  document.getElementById("editModal").style.display = "none";
+}
+
+document.getElementById("editModal").addEventListener("click", function(e) {
+  if (e.target === this) { closeEdit(); }
+});
+
+document.getElementById("editForm").addEventListener("submit", function(e) {
+  e.preventDefault();
+
+  var product  = document.getElementById("edit-product").value.trim();
+  var quantity = document.getElementById("edit-quantity").value.trim();
+  var price    = document.getElementById("edit-price").value.trim();
+  var valid    = true;
+
+  if (!product) {
+    document.getElementById("edit-err-product").textContent    = "Product name cannot be empty.";
+    document.getElementById("edit-err-product").style.display  = "block";
+    valid = false;
+  } else {
+    document.getElementById("edit-err-product").style.display  = "none";
+  }
+
+  if (!quantity) {
+    document.getElementById("edit-err-quantity").textContent   = "Quantity cannot be empty.";
+    document.getElementById("edit-err-quantity").style.display = "block";
+    valid = false;
+  } else {
+    document.getElementById("edit-err-quantity").style.display = "none";
+  }
+
+  if (!price) {
+    document.getElementById("edit-err-price").textContent      = "Price cannot be empty.";
+    document.getElementById("edit-err-price").style.display    = "block";
+    valid = false;
+  } else if (parseFloat(price) <= 0) {
+    document.getElementById("edit-err-price").textContent      = "Price must be greater than zero.";
+    document.getElementById("edit-err-price").style.display    = "block";
+    valid = false;
+  } else {
+    document.getElementById("edit-err-price").style.display    = "none";
+  }
+
+  if (valid) {
+    this.submit();
+  }
+});
+
+// ── Place Order validation ──
+var orderForm = document.getElementById("orderForm");
+if (orderForm) {
+
+  var productErrors = [
+    "Product name is required.",
+    "You need to enter a product.",
+    "A product name cannot be left empty.",
+  ];
+  var quantityErrors = [
+    "Quantity is required.",
+    "You need to specify a quantity.",
+    "Quantity cannot be left empty.",
+  ];
+  var priceErrors = [
+    "Price is required.",
+    "You need to enter a price.",
+    "A price cannot be left empty.",
+    "Price must be provided before submitting.",
+  ];
+  var priceInvalid = [
+    "Price must be a positive number.",
+    "Enter a valid price greater than zero.",
+    "Price cannot be zero or negative.",
+  ];
+
+  function pick(arr) {
+    var index = Math.floor(Math.random() * arr.length);
+    return arr[index];
+  }
+
+  function showErr(id, msg) {
+    var el = document.getElementById("err-" + id);
+    el.textContent = msg;
+    if (msg) {
+      el.style.display = "block";
+    } else {
+      el.style.display = "none";
+    }
+  }
+
+  orderForm.addEventListener("submit", function(e) {
+    e.preventDefault();
+    var product  = document.getElementById("product").value.trim();
+    var quantity = document.getElementById("quantity").value.trim();
+    var price    = document.getElementById("price").value.trim();
+    var valid    = true;
+
+    if (!product) {
+      showErr("product", pick(productErrors));
+      valid = false;
+    } else {
+      showErr("product", "");
+    }
+
+    if (!quantity) {
+      showErr("quantity", pick(quantityErrors));
+      valid = false;
+    } else {
+      showErr("quantity", "");
+    }
+
+    if (!price) {
+      showErr("price", pick(priceErrors));
+      valid = false;
+    } else if (parseFloat(price) <= 0) {
+      showErr("price", pick(priceInvalid));
+      valid = false;
+    } else {
+      showErr("price", "");
+    }
+
+    if (valid) {
+      var form = document.createElement("form");
+      form.method = "POST";
+      form.action = "/place_order";
+      var pairs = [["product", product], ["quantity", quantity], ["price", price]];
+      var i;
+      for (i = 0; i < pairs.length; i++) {
+        var input = document.createElement("input");
+        input.name  = pairs[i][0];
+        input.value = pairs[i][1];
+        form.appendChild(input);
+      }
+      document.body.appendChild(form);
+      form.submit();
+    }
+  });
+
+}
+</script>
+
+{% endblock %}
